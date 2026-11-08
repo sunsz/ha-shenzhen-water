@@ -40,15 +40,20 @@ class ShenzhenWaterApi:
         openid: str,
         tenant_id: str = DEFAULT_TENANT_ID,
         channel: str = DEFAULT_CHANNEL,
+        utoken: str = "",
+        guid: str = "",
     ) -> None:
         self._session = session
         self._customer_code = customer_code
         self._openid = openid
-        self._guid = ""
-        self._utoken = ""
+        # 可选：直接注入小程序会话（Utoken + GUID），跳过 AutomaticLoginV20。
+        # 新版小程序要求先换取微信 code 才能建立会话，仅凭 OpenID 登录会被服务端
+        # 拒绝（返回「不能识别用户i」），此时可在配置目录放置抓到的会话续用。
+        self._guid = str(guid or "")
+        self._utoken = str(utoken or "")
         self._tenant_id = tenant_id
         self._channel = channel
-        self._logged_in = False
+        self._logged_in = bool(self._utoken and self._guid)
 
     @property
     def customer_code(self) -> str:
@@ -117,7 +122,8 @@ class ShenzhenWaterApi:
             "Accept": "*/*",
             "Channel": self._channel,
             "Content-Type": "application/json",
-            "OpenId": self._openid,
+            # 登录阶段(include_token=False)服务端要求 OpenId 头发空，否则回「不能识别用户」
+            "OpenId": self._openid if include_token else "",
             "Referer": "https://servicewechat.com/wx987545bf02573f61/198/page-frame.html",
             "TenantId": self._tenant_id,
             "User-Agent": (
@@ -143,6 +149,10 @@ class ShenzhenWaterApi:
                 "未登录",
                 "请登录",
                 "9999904",
+                # 新版登录链路失败文案：小程序改成先用 wx.login code 换 OpenID，
+                # 纯 OpenID 调 AutomaticLoginV20 会被拒，报「不能识别用户i」。
+                "不能识别用户",
+                "guid不能为空",
             )
         )
 
@@ -221,8 +231,18 @@ class ShenzhenWaterApi:
         return data
 
     async def _ensure_login(self) -> None:
-        if not self._logged_in:
-            await self.async_login()
+        if self._logged_in:
+            return
+        if self._utoken and self._guid:
+            self._logged_in = True
+            return
+        await self.async_login()
+
+    def set_session(self, utoken: str, guid: str) -> None:
+        """Inject a captured mini-program session (Utoken + guid)."""
+        self._utoken = str(utoken or "")
+        self._guid = str(guid or "")
+        self._logged_in = bool(self._utoken and self._guid)
 
     def _base_payload(self) -> dict[str, Any]:
         payload: dict[str, Any] = {

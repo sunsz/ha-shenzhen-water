@@ -35,7 +35,7 @@
 通过 HACS 自定义仓库安装：
 
 ```text
-https://github.com/Chaxcy/ha-shenzhen-water
+https://github.com/sunsz/ha-shenzhen-water
 ```
 
 类型选择：
@@ -66,6 +66,16 @@ Integration
 `customercode`、`Utoken`、`GUID` 不需要填写，集成会自动读取或刷新。
 
 详细步骤见 [抓包说明](docs/capture-guide.md)。
+
+## OpenID 登录失效时
+
+新版小程序改成「先用 `wx.login` 的 code 换 OpenID，再登录」之后，服务端不再接受仅凭 OpenID 调用 `AutomaticLoginV20`，会返回 `不能识别用户i`。此时可以跳过登录，直接注入抓到的会话：在配置目录放置 `shenzhen_water_auth.json`
+
+```json
+{"utoken": "抓到的 Utoken", "guid": "抓到的 GUID"}
+```
+
+然后重载集成即可。注意同一账号只保留一个有效会话——你在微信里重新打开小程序会把这枚 `Utoken` 顶掉，集成会变成 `unavailable` 并留下一条持久通知，重新抓取覆盖该文件就能恢复。详见 [抓包说明](docs/capture-guide.md#openid-登录失效后注入会话)。
 
 ## 免责声明
 
